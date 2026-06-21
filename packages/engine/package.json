@@ -1,0 +1,17 @@
+{
+  "name": "@ghostchain/engine",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node --input-type=module -e \"import { cpSync } from 'node:fs'; cpSync('src/wordlists','dist/wordlists',{ recursive: true });\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "node -e \"process.exit(0)\""
+  },
+  "dependencies": {
+    "@ghostchain/shared": "workspace:*",
+    "cheerio": "^1.0.0",
+    "undici": "^6.19.8"
+  }
+}

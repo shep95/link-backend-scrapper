@@ -1,0 +1,16 @@
+{
+  "name": "ghostchain",
+  "private": true,
+  "packageManager": "pnpm@9.12.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm --filter @ghostchain/server dev",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "scan": "pnpm --filter @ghostchain/cli start --"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "typescript": "^5.6.3"
+  }
+}

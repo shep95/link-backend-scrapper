@@ -1,0 +1,19 @@
+{
+  "name": "@ghostchain/server",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "node --watch dist/main.js",
+    "start": "node dist/main.js",
+    "lint": "node -e \"process.exit(0)\""
+  },
+  "dependencies": {
+    "@ghostchain/engine": "workspace:*",
+    "@ghostchain/reporting": "workspace:*",
+    "@ghostchain/shared": "workspace:*",
+    "@ghostchain/storage": "workspace:*"
+  }
+}
