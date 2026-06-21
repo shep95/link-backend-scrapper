@@ -20,7 +20,8 @@ export const ScanCreateSchema = z.object({
       maxCrawlDepth: z.number().int().min(0).max(20).optional(),
       maxUrlsPerHost: z.number().int().min(1).max(50_000).optional(),
       ports: z.array(z.number().int().min(1).max(65535)).optional(),
-      wordlist: z.enum(["small", "medium"]).optional()
+      wordlist: z.enum(["small", "medium"]).optional(),
+      auditCodebase: z.string().min(1).optional()
     })
     .default({})
 });

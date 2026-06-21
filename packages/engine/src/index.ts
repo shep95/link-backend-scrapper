@@ -22,6 +22,7 @@ import { TokenBucket } from "./rateLimit.js";
 import { isHostAllowed, buildAllowHostsForTarget } from "./scope.js";
 import { getTlsSans } from "./tls.js";
 import { uid, nowIso } from "./utils.js";
+import { runFullAudit } from "./pipeline/index.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -98,6 +99,7 @@ export async function runScan(input: ScanCreateInput, scanId = uid("scan")): Pro
   const findings: Finding[] = [];
   const requestLogs: RequestLog[] = [];
   const meta: Record<string, unknown> = { hosts: {} };
+  const remoteBodies: Array<{ url: string; content: string }> = [];
 
   try {
     for (const rawTarget of input.targets) {
@@ -178,6 +180,12 @@ export async function runScan(input: ScanCreateInput, scanId = uid("scan")): Pro
             retries: 0,
             created_at: nowIso()
           });
+          if (probe.body.byteLength > 0 && probe.body.byteLength <= 1_500_000) {
+            remoteBodies.push({
+              url: probe.url,
+              content: new TextDecoder().decode(probe.body.slice(0, 500_000))
+            });
+          }
           findings.push(...runAudits(scanId, host, probe));
         } catch {
           requestLogs.push({
@@ -202,6 +210,14 @@ export async function runScan(input: ScanCreateInput, scanId = uid("scan")): Pro
     scan.error = err instanceof Error ? err.message : String(err);
   }
 
+  const auditReport = await runFullAudit({
+    ...(typeof input.options.auditCodebase === "string" ? { codebaseRoot: input.options.auditCodebase } : {}),
+    targets: input.targets,
+    remoteBodies,
+    scanFindings: findings
+  });
+  meta.audit = auditReport;
+
   return { scan, findings, requestLogs, meta };
 }
 
@@ -217,3 +233,4 @@ export * from "./httpProbe.js";
 export * from "./crawl.js";
 export * from "./discover.js";
 export * from "./audits/index.js";
+export * from "./pipeline/index.js";

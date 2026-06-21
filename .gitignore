@@ -4,3 +4,6 @@ dist
 data
 *.log
 .env
+audit-out*/
+scan-out*/
+scan-targets.txt

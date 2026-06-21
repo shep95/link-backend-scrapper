@@ -176,6 +176,30 @@ Outputs in `./out`:
 - `report.json` — full scan payload
 - `report.sarif.json` — CI / GitHub Code Scanning compatible
 - `report.html` — human-readable report
+- `audit-report.json` / `audit-report.html` — narrative audit, exploit map, API key tests
+
+### Narrative audit pipeline
+
+Every scan runs the **narrative audit pipeline** on downloaded target content. Optionally audit your full codebase too:
+
+```bash
+# Scan + audit remote target AND all local source files
+pnpm scan -- --targets ./targets.txt --out ./out --audit-codebase .
+
+# Codebase-only audit (no live scan)
+pnpm --filter @ghostchain/cli start -- --audit-only --audit-codebase . --out ./audit-out
+```
+
+For each file the pipeline:
+
+1. **Reads** the source file
+2. **Writes** an original narrative (what the file does)
+3. **Analyzes** the narrative for security, workflow, bug, and logical flaws
+4. **Writes** a revised narrative with remediation guidance
+5. **Emits** suggested code patches and an exploit/takedown map
+6. **Tests** all discovered API keys (GitHub, Stripe, Supabase JWT, AWS patterns, etc.)
+
+The audit report includes flaw counts by category, hacker exploit scenarios with patches, and live API key validation results.
 
 ---
 
