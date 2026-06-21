@@ -183,7 +183,7 @@ export async function runScan(input: ScanCreateInput, scanId = uid("scan")): Pro
           if (probe.body.byteLength > 0 && probe.body.byteLength <= 1_500_000) {
             remoteBodies.push({
               url: probe.url,
-              content: new TextDecoder().decode(probe.body.slice(0, 500_000))
+              content: new TextDecoder().decode(probe.body)
             });
           }
           findings.push(...runAudits(scanId, host, probe));
