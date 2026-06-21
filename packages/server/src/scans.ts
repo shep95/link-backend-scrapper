@@ -13,7 +13,25 @@ import {
   updateScanStatus
 } from "@ghostchain/storage";
 
+const MAX_CONCURRENT_SCANS = 3;
 const running = new Set<string>();
+let activeScans = 0;
+const waitQueue: Array<() => void> = [];
+
+async function acquireScanSlot(): Promise<void> {
+  if (activeScans < MAX_CONCURRENT_SCANS) {
+    activeScans++;
+    return;
+  }
+  await new Promise<void>((resolve) => waitQueue.push(resolve));
+  activeScans++;
+}
+
+function releaseScanSlot(): void {
+  activeScans--;
+  const next = waitQueue.shift();
+  if (next) next();
+}
 
 export async function enqueueScan(db: Db, input: ScanCreateInput): Promise<{ scan_id: string }> {
   const scanId = uid("scan");
@@ -33,6 +51,8 @@ export async function enqueueScan(db: Db, input: ScanCreateInput): Promise<{ sca
 async function executeScan(db: Db, scanId: string, input: ScanCreateInput): Promise<void> {
   if (running.has(scanId)) return;
   running.add(scanId);
+
+  await acquireScanSlot();
   updateScanStatus(db, scanId, "running");
 
   try {
@@ -56,6 +76,7 @@ async function executeScan(db: Db, scanId: string, input: ScanCreateInput): Prom
     updateScanStatus(db, scanId, "error", err instanceof Error ? err.message : String(err));
   } finally {
     running.delete(scanId);
+    releaseScanSlot();
   }
 }
 

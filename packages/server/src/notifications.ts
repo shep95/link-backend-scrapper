@@ -6,6 +6,5 @@ export function getNotifications(db: Db) {
 }
 
 export function ackNotification(db: Db, id: string, by: string): boolean {
-  acknowledgeNotification(db, id, by);
-  return true;
+  return acknowledgeNotification(db, id, by);
 }

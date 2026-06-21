@@ -76,7 +76,16 @@ export function getScan(db: Db, id: string): Scan | null {
 
 export function listFindings(db: Db, scanId: string): Finding[] {
   const rows = db
-    .prepare(`SELECT * FROM findings WHERE scan_id = ? ORDER BY severity DESC, created_at DESC`)
+    .prepare(
+      `SELECT * FROM findings WHERE scan_id = ?
+       ORDER BY CASE severity
+         WHEN 'CRITICAL' THEN 4
+         WHEN 'HIGH' THEN 3
+         WHEN 'MEDIUM' THEN 2
+         WHEN 'LOW' THEN 1
+         ELSE 0
+       END DESC, created_at DESC`
+    )
     .all(scanId) as Array<Record<string, unknown>>;
   return rows.map(rowToFinding);
 }
@@ -88,12 +97,22 @@ export function listNotifications(db: Db, limit = 100): NotificationEvent[] {
   return rows.map(rowToNotification);
 }
 
-export function acknowledgeNotification(db: Db, id: string, by: string): void {
-  db.prepare(`UPDATE notifications SET acknowledged_at = ?, acknowledged_by = ? WHERE id = ?`).run(
-    new Date().toISOString(),
-    by,
-    id
-  );
+export function acknowledgeNotification(db: Db, id: string, by: string): boolean {
+  const result = db
+    .prepare(
+      `UPDATE notifications SET acknowledged_at = ?, acknowledged_by = ?
+       WHERE id = ? AND acknowledged_at IS NULL`
+    )
+    .run(new Date().toISOString(), by, id);
+  return result.changes > 0;
+}
+
+function safeJsonParse<T>(raw: string, fallback: T): T {
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
 }
 
 function rowToScan(row: Record<string, unknown>): Scan {
@@ -101,8 +120,8 @@ function rowToScan(row: Record<string, unknown>): Scan {
     id: String(row.id),
     created_at: String(row.created_at),
     mode: row.mode as Scan["mode"],
-    targets: JSON.parse(String(row.targets_json)),
-    options: JSON.parse(String(row.options_json)),
+    targets: safeJsonParse(String(row.targets_json), []),
+    options: safeJsonParse(String(row.options_json), {}),
     status: row.status as Scan["status"]
   };
   if (row.error) scan.error = String(row.error);
@@ -118,7 +137,7 @@ function rowToFinding(row: Record<string, unknown>): Finding {
     type: row.type as Finding["type"],
     severity: row.severity as Finding["severity"],
     confidence: Number(row.confidence),
-    evidence: JSON.parse(String(row.evidence_json)),
+    evidence: safeJsonParse(String(row.evidence_json), { summary: "Evidence unavailable", anchors: {} }),
     created_at: String(row.created_at)
   };
 }

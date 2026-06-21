@@ -23,7 +23,10 @@ export type Notification = {
 };
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, init);
+  const res = await fetch(path, {
+    credentials: "same-origin",
+    ...init
+  });
   if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
   return (await res.json()) as T;
 }
@@ -36,7 +39,9 @@ export const client = {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body)
     }),
-  getScan: (id: string) => api<{ scan: Scan; findings: Finding[] }>(`/api/scans/${id}`),
+  getScan: (id: string) =>
+    api<{ scan: Scan; findings: Finding[] }>(`/api/scans/${encodeURIComponent(id)}`),
   listNotifications: () => api<{ notifications: Notification[] }>("/api/notifications"),
-  ack: (id: string) => api<{ ok: boolean }>(`/api/notifications/${id}/ack`, { method: "POST" })
+  ack: (id: string) =>
+    api<{ ok: boolean }>(`/api/notifications/${encodeURIComponent(id)}/ack`, { method: "POST" })
 };

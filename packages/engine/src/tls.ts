@@ -1,6 +1,11 @@
 import tls from "node:tls";
 
-export async function getTlsSans(host: string, port = 443): Promise<string[]> {
+export type TlsProbeResult = {
+  connected: boolean;
+  sans: string[];
+};
+
+export async function getTlsSans(host: string, port = 443): Promise<TlsProbeResult> {
   return await new Promise((resolve) => {
     const socket = tls.connect(
       {
@@ -22,14 +27,14 @@ export async function getTlsSans(host: string, port = 443): Promise<string[]> {
           .map((s) => s.slice(4).trim())
           .filter(Boolean);
         socket.end();
-        resolve(Array.from(new Set(sans)));
+        resolve({ connected: true, sans: Array.from(new Set(sans)) });
       }
     );
 
-    socket.on("error", () => resolve([]));
+    socket.on("error", () => resolve({ connected: false, sans: [] }));
     socket.on("timeout", () => {
       socket.destroy();
-      resolve([]);
+      resolve({ connected: false, sans: [] });
     });
   });
 }

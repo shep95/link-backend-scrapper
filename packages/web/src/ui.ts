@@ -1,12 +1,21 @@
 import { client } from "./api.js";
 import { setState, state } from "./state.js";
 
+let refreshInFlight = false;
+let selectedScanRequest = 0;
+
 function esc(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function sevClass(s: string): string {
-  return `pill pill-${s.toLowerCase()}`;
+  const safe = s.toLowerCase().replace(/[^a-z0-9_-]/g, "");
+  return `pill pill-${safe}`;
 }
 
 export function render(): void {
@@ -18,7 +27,7 @@ export function render(): void {
       <aside class="sidebar">
         <div class="brand">GhostChain</div>
         <p class="tagline">Defensive exposure scanner</p>
-        <button id="new-scan" class="btn primary">New scan</button>
+        <button id="new-scan" class="btn primary" ${state.loading ? "disabled" : ""}>New scan</button>
         <h3>Recent scans</h3>
         <ul class="scan-list">
           ${state.scans
@@ -34,6 +43,7 @@ export function render(): void {
       </aside>
       <main class="main">
         ${state.error ? `<div class="alert">${esc(state.error)}</div>` : ""}
+        ${state.loading ? `<div class="alert">Loading…</div>` : ""}
         <section class="grid">
           <div class="panel">
             <h2>Findings ${state.selectedScanId ? `<small>${esc(state.selectedScanId)}</small>` : ""}</h2>
@@ -48,7 +58,7 @@ export function render(): void {
                     <td><span class="${sevClass(f.severity)}">${esc(f.severity)}</span></td>
                     <td>${esc(f.type)}</td>
                     <td class="mono">${esc(f.url)}</td>
-                    <td>${esc(f.evidence.summary)}</td>
+                    <td>${esc(f.evidence?.summary ?? "")}</td>
                   </tr>`
                         )
                         .join("")
@@ -83,11 +93,13 @@ export function render(): void {
     const target = prompt("Target host or URL:");
     if (!target) return;
     setState({ loading: true, error: null });
+    render();
     try {
-      await client.createScan({ targets: [target], mode: "full" });
+      const created = await client.createScan({ targets: [target], mode: "surface" });
+      setState({ selectedScanId: created.scan_id });
       await refresh();
     } catch (e) {
-      setState({ error: e instanceof Error ? e.message : String(e) });
+      setState({ error: e instanceof Error ? e.message : String(e), loading: false });
       render();
     }
   });
@@ -96,12 +108,16 @@ export function render(): void {
     el.addEventListener("click", async () => {
       const id = (el as HTMLElement).dataset.id;
       if (!id) return;
-      setState({ selectedScanId: id, loading: true });
+      const requestId = ++selectedScanRequest;
+      setState({ selectedScanId: id, loading: true, error: null });
+      render();
       try {
         const data = await client.getScan(id);
+        if (requestId !== selectedScanRequest) return;
         setState({ findings: data.findings, loading: false });
         render();
       } catch (e) {
+        if (requestId !== selectedScanRequest) return;
         setState({ error: e instanceof Error ? e.message : String(e), loading: false });
         render();
       }
@@ -112,20 +128,43 @@ export function render(): void {
     btn.addEventListener("click", async () => {
       const id = (btn as HTMLElement).dataset.ack;
       if (!id) return;
-      await client.ack(id);
-      await refresh();
+      try {
+        await client.ack(id);
+        await refresh();
+      } catch (e) {
+        setState({ error: e instanceof Error ? e.message : String(e) });
+        render();
+      }
     });
   });
 }
 
+async function loadSelectedScanFindings(): Promise<void> {
+  if (!state.selectedScanId) return;
+  const requestId = ++selectedScanRequest;
+  try {
+    const data = await client.getScan(state.selectedScanId);
+    if (requestId !== selectedScanRequest) return;
+    setState({ findings: data.findings });
+  } catch {
+    // Keep existing findings on transient poll failures.
+  }
+}
+
 export async function refresh(): Promise<void> {
+  if (refreshInFlight) return;
+  refreshInFlight = true;
   setState({ loading: true, error: null });
+  render();
   try {
     const [scans, notifs] = await Promise.all([client.listScans(), client.listNotifications()]);
     setState({ scans: scans.scans, notifications: notifs.notifications, loading: false });
+    await loadSelectedScanFindings();
     render();
   } catch (e) {
     setState({ error: e instanceof Error ? e.message : String(e), loading: false });
     render();
+  } finally {
+    refreshInFlight = false;
   }
 }

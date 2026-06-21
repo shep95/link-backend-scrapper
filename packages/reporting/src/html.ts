@@ -1,19 +1,38 @@
 import type { Finding, Scan } from "@ghostchain/shared";
 
 function esc(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function safeHref(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (u.protocol === "http:" || u.protocol === "https:") return esc(url);
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export function toHtml(scan: Scan, findings: Finding[]): string {
   const rows = findings
-    .map(
-      (f) => `<tr>
+    .map((f) => {
+      const href = safeHref(f.url);
+      const urlCell = href
+        ? `<a href="${href}" rel="noopener noreferrer">${esc(f.url)}</a>`
+        : esc(f.url);
+      return `<tr>
         <td><span class="sev sev-${f.severity.toLowerCase()}">${esc(f.severity)}</span></td>
         <td>${esc(f.type)}</td>
-        <td><a href="${esc(f.url)}">${esc(f.url)}</a></td>
+        <td>${urlCell}</td>
         <td>${esc(f.evidence.summary)}</td>
-      </tr>`
-    )
+      </tr>`;
+    })
     .join("\n");
 
   return `<!DOCTYPE html>

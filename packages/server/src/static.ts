@@ -1,11 +1,24 @@
 import { readFileSync, existsSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { join, dirname, resolve, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const DIST_DIR = resolve(__dirname, "../../web/dist");
+
+const MIME_TYPES: Record<string, string> = {
+  ".html": "text/html; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".js": "application/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".ico": "image/x-icon",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2"
+};
 
 export function getDashboardHtml(): string {
-  const built = join(__dirname, "../../web/dist/index.html");
+  const built = join(DIST_DIR, "index.html");
   if (existsSync(built)) return readFileSync(built, "utf8");
 
   return `<!DOCTYPE html>
@@ -30,8 +43,20 @@ export function getDashboardHtml(): string {
 </html>`;
 }
 
-export function getStaticAsset(name: string): Buffer | null {
-  const p = join(__dirname, "../../web/dist", name);
-  if (!existsSync(p)) return null;
-  return readFileSync(p);
+function isPathInsideDist(candidate: string): boolean {
+  const rel = relative(DIST_DIR, candidate);
+  return rel !== "" && !rel.startsWith(`..${sep}`) && rel !== "..";
+}
+
+export function getStaticAsset(name: string): { data: Buffer; contentType: string } | null {
+  const normalized = name.replace(/\\/g, "/").replace(/^\/+/, "");
+  if (normalized.includes("..")) return null;
+
+  const resolved = resolve(DIST_DIR, normalized);
+  if (!isPathInsideDist(resolved)) return null;
+  if (!existsSync(resolved)) return null;
+
+  const ext = normalized.slice(normalized.lastIndexOf(".")).toLowerCase();
+  const contentType = MIME_TYPES[ext] ?? "application/octet-stream";
+  return { data: readFileSync(resolved), contentType };
 }

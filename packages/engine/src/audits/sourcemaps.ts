@@ -9,8 +9,11 @@ export function auditSourcemaps(
   contentType: string
 ): Finding[] {
   if (status !== 200) return [];
-  const isMap = url.endsWith(".map") || contentType.includes("application/json");
+
+  const pathLooksLikeMap = /\.map($|\?)/i.test(url);
+  const isMap = url.endsWith(".map") || (pathLooksLikeMap && contentType.includes("application/json"));
   if (!isMap) return [];
+
   return [
     {
       id: uid("finding"),

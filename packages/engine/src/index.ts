@@ -19,7 +19,7 @@ import { createHttpAgent, type HttpClientOptions } from "./httpClient.js";
 import { probeHttp } from "./httpProbe.js";
 import { tcpConnect } from "./portProbe.js";
 import { TokenBucket } from "./rateLimit.js";
-import { isHostAllowed } from "./scope.js";
+import { isHostAllowed, buildAllowHostsForTarget } from "./scope.js";
 import { getTlsSans } from "./tls.js";
 import { uid, nowIso } from "./utils.js";
 
@@ -95,7 +95,6 @@ export async function runScan(input: ScanCreateInput, scanId = uid("scan")): Pro
   };
 
   const agent = createHttpAgent();
-  const httpOpts: HttpClientOptions = { timeoutMs: 12_000, maxRedirs: 5, userAgent: cfg.userAgent };
   const findings: Finding[] = [];
   const requestLogs: RequestLog[] = [];
   const meta: Record<string, unknown> = { hosts: {} };
@@ -103,17 +102,26 @@ export async function runScan(input: ScanCreateInput, scanId = uid("scan")): Pro
   try {
     for (const rawTarget of input.targets) {
       const { host, baseUrl } = normalizeTarget(rawTarget);
-      if (!isHostAllowed(host, [host, `*.${host.split(".").slice(-2).join(".")}`])) {
+      const allowedHosts = buildAllowHostsForTarget(host);
+      if (!isHostAllowed(host, allowedHosts)) {
         continue;
       }
 
       const hostMeta: Record<string, unknown> = {};
       const bucket = new TokenBucket(cfg.maxRpsPerHost, cfg.maxRpsPerHost);
       const urlsToProbe = new Set<string>([baseUrl]);
+      const httpOpts: HttpClientOptions = {
+        timeoutMs: 12_000,
+        maxRedirs: 5,
+        userAgent: cfg.userAgent,
+        allowedHosts
+      };
 
       if (input.mode === "surface" || input.mode === "full") {
         hostMeta.dns = await collectDns(host);
-        hostMeta.tlsSans = await getTlsSans(host);
+        const tlsResult = await getTlsSans(host);
+        hostMeta.tlsSans = tlsResult.sans;
+        hostMeta.tlsConnected = tlsResult.connected;
         const openPorts: number[] = [];
         for (const port of cfg.ports) {
           if (await tcpConnect(host, port)) openPorts.push(port);
@@ -123,7 +131,7 @@ export async function runScan(input: ScanCreateInput, scanId = uid("scan")): Pro
         if (openPorts.includes(443)) urlsToProbe.add(`https://${host}/`);
         if (openPorts.includes(80)) urlsToProbe.add(`http://${host}/`);
 
-        if (hostMeta.tlsSans && Array.isArray(hostMeta.tlsSans) && (hostMeta.tlsSans as string[]).length === 0) {
+        if (tlsResult.connected && tlsResult.sans.length === 0) {
           findings.push({
             id: uid("finding"),
             scan_id: scanId,
@@ -132,7 +140,7 @@ export async function runScan(input: ScanCreateInput, scanId = uid("scan")): Pro
             type: "TLS_POSTURE",
             severity: "LOW",
             confidence: 0.5,
-            evidence: { summary: "No TLS SANs collected or TLS unreachable", anchors: { host } },
+            evidence: { summary: "TLS reachable but no DNS SANs found on certificate", anchors: { host } },
             created_at: nowIso()
           });
         }

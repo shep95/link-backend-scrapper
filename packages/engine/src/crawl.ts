@@ -32,7 +32,13 @@ export async function crawl(
 
     seen.add(canon);
 
-    const res = await httpGet(agent, canon, httpOpts);
+    let res: Awaited<ReturnType<typeof httpGet>>;
+    try {
+      res = await httpGet(agent, canon, httpOpts);
+    } catch {
+      continue;
+    }
+
     const ct = res.headers["content-type"] ?? "";
     if (!ct.includes("text/html")) continue;
 

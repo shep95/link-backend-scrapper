@@ -23,7 +23,7 @@ export async function probeHttp(
     if (m?.[1]) title = m[1].trim();
   }
   return {
-    url,
+    url: res.finalUrl,
     status: res.status,
     headers: res.headers,
     contentType,
